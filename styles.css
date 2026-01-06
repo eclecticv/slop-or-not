@@ -1,0 +1,145 @@
+/*
+ * Slop or Not - Badge Styles
+ * Inspired by Apple Human Interface Guidelines & Medium's clean aesthetic
+ */
+
+/* ============================================
+   CSS Custom Properties (Design Tokens)
+   ============================================ */
+:root {
+  /* Typography */
+  --font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+  /* Neutrals */
+  --color-text-primary: #1D1D1F;
+  --color-text-secondary: #6E6E73;
+  --color-text-tertiary: #AEAEB2;
+  --color-background: #FFFFFF;
+  --color-surface: #F5F5F7;
+  --color-border: rgba(0, 0, 0, 0.06);
+
+  /* Shadows - Apple-style layered shadows */
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.04);
+
+  /* Timing */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quad: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* ============================================
+   Badge Container
+   ============================================ */
+.slop-detector-badge {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  background: #ffffff;
+  cursor: default;
+  font-family: var(--font-family);
+  transition: all 0.2s var(--ease-out-quad);
+  max-width: 200px;
+}
+
+/* Colored borders based on level */
+.slop-detector-badge[data-level="2"] {
+  border: 2px solid #10b981; /* Green border for Human */
+}
+
+.slop-detector-badge[data-level="1"] {
+  border: 2px solid #ef4444; /* Red border for Slop */
+}
+
+.slop-detector-badge:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
+}
+
+/* ============================================
+   Badge Content Layout
+   ============================================ */
+.slop-badge-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ============================================
+   Icon
+   ============================================ */
+.slop-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* ============================================
+   Label Typography
+   ============================================ */
+.slop-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.slop-detector-badge[data-level="2"] .slop-label {
+  color: #10b981;
+}
+
+.slop-detector-badge[data-level="1"] .slop-label {
+  color: #ef4444;
+}
+
+/* ============================================
+   Commentary
+   ============================================ */
+.slop-commentary {
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+}
+
+/* ============================================
+   Entry Animation
+   ============================================ */
+@keyframes badgeAppear {
+  0% {
+    opacity: 0;
+    transform: scale(0.95) translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.slop-detector-badge {
+  animation: badgeAppear 0.3s var(--ease-out-expo) forwards;
+}
+
+
+/* ============================================
+   Dark Mode Support (respects system preference)
+   ============================================ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: #1C1C1E;
+    --color-surface: #2C2C2E;
+    --color-border: rgba(255, 255, 255, 0.1);
+    --color-text-primary: #F5F5F7;
+    --color-text-secondary: #A1A1A6;
+
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Keep white badge background in dark mode */
+  .slop-detector-badge {
+    background: #ffffff;
+  }
+}

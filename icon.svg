@@ -1,0 +1,22 @@
+<svg width="128" height="128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="128" height="128" fill="#1a1a2e" rx="28"/>
+
+  <!-- Document/text lines (representing content being analyzed) -->
+  <g transform="translate(20, 24)">
+    <rect x="0" y="0" width="52" height="6" fill="#4a4a6a" rx="3"/>
+    <rect x="0" y="14" width="44" height="6" fill="#4a4a6a" rx="3"/>
+    <rect x="0" y="28" width="48" height="6" fill="#4a4a6a" rx="3"/>
+    <rect x="0" y="42" width="36" height="6" fill="#4a4a6a" rx="3"/>
+  </g>
+
+  <!-- Magnifying glass -->
+  <g transform="translate(52, 48)">
+    <!-- Glass circle -->
+    <circle cx="28" cy="28" r="26" fill="none" stroke="#f8f8f8" stroke-width="6"/>
+    <!-- Handle -->
+    <line x1="48" y1="48" x2="68" y2="68" stroke="#f8f8f8" stroke-width="8" stroke-linecap="round"/>
+    <!-- Question mark inside glass -->
+    <text x="28" y="38" font-family="SF Pro Display, -apple-system, Arial" font-size="32" font-weight="700" fill="#ef4444" text-anchor="middle">?</text>
+  </g>
+</svg>
