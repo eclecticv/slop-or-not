@@ -2,13 +2,26 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   loadStats();
+  loadBlockSetting();
 
   // Set up reset button
   document.getElementById('reset').addEventListener('click', resetStats);
 
+  // Set up block toggle
+  document.getElementById('block-toggle').addEventListener('change', (e) => {
+    chrome.storage.local.set({ slopBlockEnabled: e.target.checked });
+  });
+
   // Refresh stats every 2 seconds while popup is open
   setInterval(loadStats, 2000);
 });
+
+function loadBlockSetting() {
+  chrome.storage.local.get(['slopBlockEnabled'], (result) => {
+    const enabled = result.slopBlockEnabled !== undefined ? result.slopBlockEnabled : true;
+    document.getElementById('block-toggle').checked = enabled;
+  });
+}
 
 function loadStats() {
   chrome.storage.local.get(['slopStats'], (result) => {

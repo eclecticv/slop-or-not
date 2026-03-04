@@ -105,39 +105,6 @@
 }
 
 /* ============================================
-   Block Slop Button
-   ============================================ */
-.slop-block-btn {
-  display: block;
-  width: 100%;
-  margin-top: 6px;
-  padding: 5px 10px;
-  font-family: var(--font-family);
-  font-size: 11px;
-  font-weight: 600;
-  color: #ffffff;
-  background: #ef4444;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background 0.15s ease, transform 0.1s ease;
-  letter-spacing: 0.02em;
-}
-
-.slop-block-btn:hover {
-  background: #dc2626;
-  transform: scale(1.02);
-}
-
-.slop-block-btn[data-blocked="true"] {
-  background: #6E6E73;
-}
-
-.slop-block-btn[data-blocked="true"]:hover {
-  background: #86868b;
-}
-
-/* ============================================
    Blocked Post Overlay
    ============================================ */
 .slop-post-blocked {

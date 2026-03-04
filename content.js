@@ -11,21 +11,35 @@
       this.analyzedPosts = new Set();
       this.pendingPosts = new Map(); // postId -> {element, truncatedLength}
       this.stats = { total: 0, scores: { 1: 0, 2: 0 } };
+      this.blockSlop = true; // default: auto-erase slop posts
       this.scanTimeout = null;
-      this.loadStats().then(() => this.init());
+      this.loadSettings().then(() => this.init());
     }
 
-    async loadStats() {
+    async loadSettings() {
       try {
         if (chrome?.storage?.local) {
-          const result = await chrome.storage.local.get(['slopStats']);
+          const result = await chrome.storage.local.get(['slopStats', 'slopBlockEnabled']);
           if (result.slopStats) {
             this.stats = result.slopStats;
             log('Loaded stats from storage:', this.stats);
           }
+          if (result.slopBlockEnabled !== undefined) {
+            this.blockSlop = result.slopBlockEnabled;
+          }
         }
       } catch (e) {
-        log('Could not load stats:', e);
+        log('Could not load settings:', e);
+      }
+
+      // Listen for setting changes from popup
+      if (chrome?.storage?.onChanged) {
+        chrome.storage.onChanged.addListener((changes) => {
+          if (changes.slopBlockEnabled) {
+            this.blockSlop = changes.slopBlockEnabled.newValue;
+            this.applyBlockSetting();
+          }
+        });
       }
     }
 
@@ -1096,20 +1110,6 @@
       content.appendChild(icon);
       content.appendChild(label);
       content.appendChild(commentaryEl);
-
-      // Block button for slop posts
-      if (level === 1) {
-        const blockBtn = document.createElement('button');
-        blockBtn.className = 'slop-block-btn';
-        blockBtn.textContent = 'Block Slop';
-        blockBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          this.blockPost(post, blockBtn);
-        });
-        content.appendChild(blockBtn);
-      }
-
       badge.appendChild(content);
 
       // Create a sticky container positioned to the left
@@ -1149,31 +1149,47 @@
       post.style.position = 'relative';
       post.appendChild(stickyContainer);
 
+      // Auto-block slop posts if setting is enabled
+      if (level === 1 && this.blockSlop) {
+        this.blockPost(post);
+      }
+
       // After injecting badge, scan comments on this post
       this.scanCommentsOnPost(post);
     }
 
-    blockPost(post, btn) {
-      if (btn.dataset.blocked === 'true') {
-        // Unblock - restore the post
-        post.classList.remove('slop-post-blocked');
-        btn.textContent = 'Block Slop';
-        btn.dataset.blocked = 'false';
-        const overlay = post.querySelector('.slop-block-overlay');
-        if (overlay) overlay.remove();
-        return;
-      }
+    blockPost(post) {
+      if (post.classList.contains('slop-post-blocked')) return;
 
-      // Block - visually erase the post content
       post.classList.add('slop-post-blocked');
-      btn.textContent = 'Undo';
-      btn.dataset.blocked = 'true';
 
-      // Add overlay with message
       const overlay = document.createElement('div');
       overlay.className = 'slop-block-overlay';
       overlay.innerHTML = '<span class="slop-block-icon">🚫</span><span class="slop-block-text">Slop blocked</span>';
       post.appendChild(overlay);
+    }
+
+    unblockPost(post) {
+      post.classList.remove('slop-post-blocked');
+      const overlay = post.querySelector('.slop-block-overlay');
+      if (overlay) overlay.remove();
+    }
+
+    // Apply block setting to all already-analyzed posts
+    applyBlockSetting() {
+      const allBadges = document.querySelectorAll('.slop-detector-badge[data-level="1"]');
+      allBadges.forEach(badge => {
+        // Walk up to the post element
+        const stickyContainer = badge.parentElement;
+        const post = stickyContainer?.parentElement;
+        if (!post) return;
+
+        if (this.blockSlop) {
+          this.blockPost(post);
+        } else {
+          this.unblockPost(post);
+        }
+      });
     }
 
     // ========================================
