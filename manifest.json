@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Slop or Not!",
   "version": "1.0.0",
-  "description": "Detect AI-generated slop in your LinkedIn feed. Badges posts as Human or Slop based on 14 writing pattern heuristics.",
+  "description": "Detect AI-generated slop in your LinkedIn feed. Badges posts as Human or Slop based on 16 writing pattern heuristics. Block slop posts and spot AI reply guys.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://www.linkedin.com/*"

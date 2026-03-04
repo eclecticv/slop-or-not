@@ -312,17 +312,26 @@
       breakdown.engagementBait = this.checkEngagementBait(text);
       score += breakdown.engagementBait;
 
+      // 15. Curly Quotation Marks (Wikipedia: ChatGPT/DeepSeek use curly quotes)
+      breakdown.curlyQuotes = this.checkCurlyQuotes(text);
+      score += breakdown.curlyQuotes;
+
+      // 16. Promotional/Marketing Tone (Wikipedia: "scenic", "breathtaking", commercial-esque)
+      breakdown.promotional = this.checkPromotionalTone(text);
+      score += breakdown.promotional;
+
       return { score, breakdown };
     }
 
     // Heuristic 1: AI Vocabulary Words
-    // From Wikipedia's guide + AI Phrase Finder's top 100
+    // From Wikipedia's "Signs of AI writing" + AI Phrase Finder's top 100
+    // https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing
     checkAIVocabulary(text) {
       const aiWords = [
-        // High-signal words from Wikipedia
+        // High-signal words from Wikipedia (2023–mid-2024 GPT-4 era)
         'delve', 'delving', 'delved',
         'tapestry', 'multifaceted', 'comprehensive',
-        'intricate', 'nuanced', 'multitude',
+        'intricate', 'intricacies', 'nuanced', 'multitude',
         'realm', 'paradigm', 'ethos',
         'embark', 'beacon', 'testament',
         'pivotal', 'paramount', 'profound',
@@ -347,7 +356,7 @@
         'endeavor', 'endeavors',
         'cornerstone',
         'spearhead', 'spearheading',
-        'bolster', 'bolstering',
+        'bolster', 'bolstering', 'bolstered',
         'augment', 'augmenting',
         'harness', 'harnessing',
         'cultivate', 'cultivating',
@@ -362,7 +371,34 @@
         'trailblazing',
         'unparalleled',
         'unrivaled',
-        'unprecedented'
+        'unprecedented',
+
+        // Wikipedia GPT-4 era additions
+        'garner', 'garnered', 'garnering',
+        'boasts', 'boasting',
+        'interplay',
+        'enduring',
+
+        // Wikipedia mid-2024–mid-2025 GPT-4o era
+        'enhance', 'enhancing', 'enhanced',
+        'showcasing', 'showcased',
+        'highlighting', 'highlighted',
+        'crucial',
+        'align with',
+
+        // Additional high-signal AI words
+        'facilitate', 'facilitating',
+        'encompass', 'encompassing',
+        'elucidate', 'elucidating',
+        'amplify', 'amplifying',
+        'underpinnings',
+        'treasure trove',
+        'systemic',
+        'unleash', 'unleashing',
+        'empower', 'empowering',
+        'noteworthy',
+        'commendable',
+        'underscored'
       ];
 
       const lower = text.toLowerCase();
@@ -845,6 +881,70 @@
       return 0;
     }
 
+    // Heuristic 15: Curly Quotation Marks
+    // Wikipedia: ChatGPT and DeepSeek use curly quotes (\u201c \u201d) instead of straight quotes
+    // Mixed curly+straight in the same text is especially suspicious
+    checkCurlyQuotes(text) {
+      const curlyDoubleOpen = (text.match(/\u201c/g) || []).length;
+      const curlyDoubleClose = (text.match(/\u201d/g) || []).length;
+      const curlySingleOpen = (text.match(/\u2018/g) || []).length;
+      const curlySingleClose = (text.match(/\u2019/g) || []).length;
+      const totalCurly = curlyDoubleOpen + curlyDoubleClose + curlySingleOpen + curlySingleClose;
+
+      const straightDouble = (text.match(/"/g) || []).length;
+
+      // Mixed curly and straight quotes = strong AI signal
+      if (totalCurly > 0 && straightDouble > 0) return -3;
+      // Many curly quotes alone is still a signal on LinkedIn (people type straight quotes)
+      if (totalCurly >= 4) return -2;
+      return 0;
+    }
+
+    // Heuristic 16: Promotional/Marketing Tone
+    // Wikipedia: AI defaults to commercial-friendly adjectives, press-release tone
+    checkPromotionalTone(text) {
+      const patterns = [
+        'active social media presence',
+        'maintain an active',
+        'maintains an active',
+        'clean and modern',
+        'state-of-the-art',
+        'a wide range of',
+        'a diverse range of',
+        'a broad spectrum of',
+        'rich tapestry of',
+        'continued relevance',
+        'continued significance',
+        'cultural landscape',
+        'artistic expression',
+        'dynamic landscape',
+        'ever-evolving',
+        'ever-changing',
+        'rapidly evolving',
+        'increasingly important',
+        'remains committed',
+        'a hub for',
+        'a beacon of',
+        'poised to',
+        'well-positioned',
+        'at the forefront',
+        'pushing the boundaries',
+        'raising the bar',
+        'setting the standard'
+      ];
+
+      const lower = text.toLowerCase();
+      let matches = 0;
+      for (const p of patterns) {
+        if (lower.includes(p)) matches++;
+      }
+
+      if (matches >= 3) return -4;
+      if (matches >= 2) return -3;
+      if (matches >= 1) return -2;
+      return 0;
+    }
+
     mapScoreToLevel(score) {
       // 2-level system: Human or Slop
       // Be decisive - no "maybe"
@@ -911,7 +1011,9 @@
         emDash: ['dramatic em dashes', 'spaced em dashes', '— pause abuse —'],
         staccato: ['staccato line breaks', 'dramatic one-liners', 'punchy fragments'],
         metaphors: ['tired business clichés', 'overused metaphors', 'corporate speak'],
-        engagementBait: ['engagement bait', '"what do you think?"', 'comment-fishing']
+        engagementBait: ['engagement bait', '"what do you think?"', 'comment-fishing'],
+        curlyQuotes: ['curly smart quotes', 'ChatGPT-style quotes', 'fancy quotation marks'],
+        promotional: ['marketing speak', 'press-release tone', 'promotional language']
       };
 
       // Pick a random variant for variety
@@ -994,11 +1096,23 @@
       content.appendChild(icon);
       content.appendChild(label);
       content.appendChild(commentaryEl);
+
+      // Block button for slop posts
+      if (level === 1) {
+        const blockBtn = document.createElement('button');
+        blockBtn.className = 'slop-block-btn';
+        blockBtn.textContent = 'Block Slop';
+        blockBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          this.blockPost(post, blockBtn);
+        });
+        content.appendChild(blockBtn);
+      }
+
       badge.appendChild(content);
 
       // Create a sticky container positioned to the left
-      // Check viewport width for responsive positioning
-      const viewportWidth = window.innerWidth;
       const postRect = post.getBoundingClientRect();
       const spaceOnLeft = postRect.left;
 
@@ -1034,6 +1148,163 @@
       stickyContainer.appendChild(badge);
       post.style.position = 'relative';
       post.appendChild(stickyContainer);
+
+      // After injecting badge, scan comments on this post
+      this.scanCommentsOnPost(post);
+    }
+
+    blockPost(post, btn) {
+      if (btn.dataset.blocked === 'true') {
+        // Unblock - restore the post
+        post.classList.remove('slop-post-blocked');
+        btn.textContent = 'Block Slop';
+        btn.dataset.blocked = 'false';
+        const overlay = post.querySelector('.slop-block-overlay');
+        if (overlay) overlay.remove();
+        return;
+      }
+
+      // Block - visually erase the post content
+      post.classList.add('slop-post-blocked');
+      btn.textContent = 'Undo';
+      btn.dataset.blocked = 'true';
+
+      // Add overlay with message
+      const overlay = document.createElement('div');
+      overlay.className = 'slop-block-overlay';
+      overlay.innerHTML = '<span class="slop-block-icon">🚫</span><span class="slop-block-text">Slop blocked</span>';
+      post.appendChild(overlay);
+    }
+
+    // ========================================
+    // COMMENT SCANNING
+    // Detects AI-generated comments ("reply guys")
+    // ========================================
+
+    scanCommentsOnPost(post) {
+      const commentSelectors = [
+        '.comments-comment-item',
+        '.comments-comment-entity',
+        '[data-test-id*="comment"]',
+        '.feed-shared-update-v2__comments-container .artdeco-card'
+      ];
+
+      for (const selector of commentSelectors) {
+        const comments = post.querySelectorAll(selector);
+        comments.forEach(comment => this.analyzeComment(comment));
+      }
+
+      // Also observe for newly loaded comments
+      const commentsContainer = post.querySelector(
+        '.comments-comments-list, [class*="comments-container"], [class*="comment-list"]'
+      );
+      if (commentsContainer && !commentsContainer.dataset.slopObserved) {
+        commentsContainer.dataset.slopObserved = 'true';
+        const observer = new MutationObserver(() => {
+          for (const selector of commentSelectors) {
+            const comments = post.querySelectorAll(selector);
+            comments.forEach(comment => this.analyzeComment(comment));
+          }
+        });
+        observer.observe(commentsContainer, { childList: true, subtree: true });
+      }
+    }
+
+    analyzeComment(comment) {
+      if (comment.dataset.slopAnalyzed) return;
+      comment.dataset.slopAnalyzed = 'true';
+
+      // Extract comment text
+      const textEl = comment.querySelector(
+        '.comments-comment-item__main-content, ' +
+        '.update-components-text, ' +
+        '[class*="comment-item__inline-show-more-text"], ' +
+        'span[dir="ltr"]'
+      );
+      if (!textEl) return;
+
+      let text = textEl.innerText || textEl.textContent || '';
+      text = text.trim();
+      if (text.length < 20) return;
+
+      // Run a lighter version of scoring tuned for short comments
+      const { score, breakdown } = this.scoreComment(text);
+
+      if (score <= -4) {
+        // High confidence AI comment - add reply guy label
+        comment.classList.add('slop-reply-guy');
+
+        const tag = document.createElement('span');
+        tag.className = 'slop-reply-guy-tag';
+        tag.textContent = 'Reply Guy 🤖';
+        tag.title = this.getCommentTooltip(breakdown);
+
+        // Insert tag near the commenter name
+        const nameEl = comment.querySelector(
+          '.comments-post-meta__name-text, ' +
+          '[class*="comment-actor"], ' +
+          '.comment-entity__actor, ' +
+          'a[class*="actor"]'
+        );
+        if (nameEl && !nameEl.parentElement.querySelector('.slop-reply-guy-tag')) {
+          nameEl.parentElement.insertBefore(tag, nameEl.nextSibling);
+        } else if (!comment.querySelector('.slop-reply-guy-tag')) {
+          comment.insertBefore(tag, comment.firstChild);
+        }
+      }
+    }
+
+    scoreComment(text) {
+      const breakdown = {};
+      let score = 0;
+
+      // Use a subset of heuristics tuned for short comments
+      breakdown.vocab = this.checkAIVocabulary(text);
+      score += breakdown.vocab;
+
+      breakdown.grandiose = this.checkGrandioseLanguage(text);
+      score += breakdown.grandiose;
+
+      breakdown.participle = this.checkParticipleTrailers(text);
+      score += breakdown.participle;
+
+      breakdown.editorial = this.checkEditorialCommentary(text);
+      score += breakdown.editorial;
+
+      breakdown.emDash = this.checkEmDashSpacing(text);
+      score += breakdown.emDash;
+
+      breakdown.curlyQuotes = this.checkCurlyQuotes(text);
+      score += breakdown.curlyQuotes;
+
+      breakdown.promotional = this.checkPromotionalTone(text);
+      score += breakdown.promotional;
+
+      breakdown.engagementBait = this.checkEngagementBait(text);
+      score += breakdown.engagementBait;
+
+      return { score, breakdown };
+    }
+
+    getCommentTooltip(breakdown) {
+      const factorNames = {
+        vocab: 'AI buzzwords',
+        grandiose: 'grandiose language',
+        participle: 'participle padding',
+        editorial: 'editorial commentary',
+        emDash: 'em dash abuse',
+        curlyQuotes: 'smart quotes',
+        promotional: 'promotional tone',
+        engagementBait: 'engagement bait'
+      };
+
+      const signals = Object.entries(breakdown)
+        .filter(([, v]) => v < 0)
+        .map(([k]) => factorNames[k] || k);
+
+      return signals.length > 0
+        ? `AI signals: ${signals.join(', ')}`
+        : 'Likely AI-generated comment';
     }
 
     getLabelText(level) {

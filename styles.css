@@ -105,6 +105,120 @@
 }
 
 /* ============================================
+   Block Slop Button
+   ============================================ */
+.slop-block-btn {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 5px 10px;
+  font-family: var(--font-family);
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  background: #ef4444;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+  letter-spacing: 0.02em;
+}
+
+.slop-block-btn:hover {
+  background: #dc2626;
+  transform: scale(1.02);
+}
+
+.slop-block-btn[data-blocked="true"] {
+  background: #6E6E73;
+}
+
+.slop-block-btn[data-blocked="true"]:hover {
+  background: #86868b;
+}
+
+/* ============================================
+   Blocked Post Overlay
+   ============================================ */
+.slop-post-blocked {
+  position: relative;
+}
+
+.slop-post-blocked > *:not(.slop-block-overlay):not([style*="position: absolute"]) {
+  filter: blur(6px) grayscale(100%) opacity(0.15);
+  pointer-events: none;
+  user-select: none;
+  transition: filter 0.3s var(--ease-out-quad);
+}
+
+.slop-block-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  z-index: 999;
+  pointer-events: none;
+  animation: overlayAppear 0.3s var(--ease-out-expo) forwards;
+}
+
+.slop-block-icon {
+  font-size: 36px;
+}
+
+.slop-block-text {
+  font-family: var(--font-family);
+  font-size: 14px;
+  font-weight: 600;
+  color: #ef4444;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+@keyframes overlayAppear {
+  0% { opacity: 0; transform: scale(0.9); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* ============================================
+   Reply Guy - AI Comment Detection
+   ============================================ */
+.slop-reply-guy {
+  background: rgba(251, 191, 36, 0.08) !important;
+  border-left: 3px solid #f59e0b !important;
+  transition: background 0.2s ease;
+}
+
+.slop-reply-guy-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-family: var(--font-family);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: 10px;
+  vertical-align: middle;
+  cursor: help;
+  white-space: nowrap;
+  animation: tagAppear 0.3s var(--ease-out-expo) forwards;
+}
+
+@keyframes tagAppear {
+  0% { opacity: 0; transform: translateX(-4px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+/* ============================================
    Entry Animation
    ============================================ */
 @keyframes badgeAppear {
@@ -141,5 +255,20 @@
   /* Keep white badge background in dark mode */
   .slop-detector-badge {
     background: #ffffff;
+  }
+
+  /* Dark mode reply guy styling */
+  .slop-reply-guy {
+    background: rgba(251, 191, 36, 0.12) !important;
+  }
+
+  .slop-reply-guy-tag {
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.15);
+    border-color: rgba(251, 191, 36, 0.4);
+  }
+
+  .slop-block-text {
+    color: #f87171;
   }
 }
