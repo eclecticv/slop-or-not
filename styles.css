@@ -105,54 +105,6 @@
 }
 
 /* ============================================
-   Blocked Post Overlay
-   ============================================ */
-.slop-post-blocked {
-  position: relative;
-}
-
-.slop-post-blocked > *:not(.slop-block-overlay):not([style*="position: absolute"]) {
-  filter: blur(6px) grayscale(100%) opacity(0.15);
-  pointer-events: none;
-  user-select: none;
-  transition: filter 0.3s var(--ease-out-quad);
-}
-
-.slop-block-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  z-index: 999;
-  pointer-events: none;
-  animation: overlayAppear 0.3s var(--ease-out-expo) forwards;
-}
-
-.slop-block-icon {
-  font-size: 36px;
-}
-
-.slop-block-text {
-  font-family: var(--font-family);
-  font-size: 14px;
-  font-weight: 600;
-  color: #ef4444;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
-@keyframes overlayAppear {
-  0% { opacity: 0; transform: scale(0.9); }
-  100% { opacity: 1; transform: scale(1); }
-}
-
-/* ============================================
    Reply Guy - AI Comment Detection
    ============================================ */
 .slop-reply-guy {
@@ -233,9 +185,5 @@
     color: #fbbf24;
     background: rgba(251, 191, 36, 0.15);
     border-color: rgba(251, 191, 36, 0.4);
-  }
-
-  .slop-block-text {
-    color: #f87171;
   }
 }

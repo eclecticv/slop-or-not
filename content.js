@@ -13,6 +13,26 @@
       this.stats = { total: 0, scores: { 1: 0, 2: 0 } };
       this.blockSlop = true; // default: auto-erase slop posts
       this.scanTimeout = null;
+      this._aiWordRegexes = null;
+      this._transitionRegexes = null;
+      this._commentObserver = null;
+
+      // Listen for setting changes from popup (once, in constructor)
+      if (chrome?.storage?.onChanged) {
+        chrome.storage.onChanged.addListener((changes) => {
+          if (changes.slopBlockEnabled) {
+            this.blockSlop = changes.slopBlockEnabled.newValue;
+            this.applyBlockSetting();
+          }
+          if (changes.slopStats) {
+            const newStats = changes.slopStats.newValue;
+            if (newStats && newStats.total === 0) {
+              this.stats = { total: 0, scores: { 1: 0, 2: 0 } };
+            }
+          }
+        });
+      }
+
       this.loadSettings().then(() => this.init());
     }
 
@@ -31,16 +51,81 @@
       } catch (e) {
         log('Could not load settings:', e);
       }
+    }
 
-      // Listen for setting changes from popup
-      if (chrome?.storage?.onChanged) {
-        chrome.storage.onChanged.addListener((changes) => {
-          if (changes.slopBlockEnabled) {
-            this.blockSlop = changes.slopBlockEnabled.newValue;
-            this.applyBlockSetting();
-          }
-        });
-      }
+    _compileRegexes() {
+      if (this._aiWordRegexes) return;
+
+      const aiWords = [
+        'delve', 'delving', 'delved',
+        'tapestry', 'multifaceted', 'comprehensive',
+        'intricate', 'intricacies', 'nuanced', 'multitude',
+        'realm', 'paradigm', 'ethos',
+        'embark', 'beacon', 'testament',
+        'pivotal', 'paramount', 'profound',
+        'meticulous', 'meticulously',
+        'intrinsic', 'intrinsically',
+        'resonate', 'resonates', 'resonating',
+        'foster', 'fostering', 'fosters',
+        'leverage', 'leveraging', 'leveraged',
+        'navigate', 'navigating', 'navigates',
+        'elevate', 'elevating', 'elevates',
+        'underscore', 'underscores', 'underscoring',
+        'robust', 'robustly',
+        'seamless', 'seamlessly',
+        'vibrant', 'bustling',
+        'bespoke', 'tailor-made',
+        'nuance', 'nuances',
+        'landscape', 'journey', 'ecosystem',
+        'holistic', 'holistically',
+        'synergy', 'synergies',
+        'endeavor', 'endeavors',
+        'cornerstone',
+        'spearhead', 'spearheading',
+        'bolster', 'bolstering', 'bolstered',
+        'augment', 'augmenting',
+        'harness', 'harnessing',
+        'cultivate', 'cultivating',
+        'aligns', 'aligning',
+        'streamline', 'streamlining',
+        'optimize', 'optimizing',
+        'revolutionize', 'revolutionizing',
+        'transformative', 'transform',
+        'game-changer', 'game-changing',
+        'cutting-edge', 'cutting edge',
+        'groundbreaking', 'trailblazing',
+        'unparalleled', 'unrivaled', 'unprecedented',
+        'garner', 'garnered', 'garnering',
+        'boasts', 'boasting', 'interplay', 'enduring',
+        'enhance', 'enhancing', 'enhanced',
+        'showcasing', 'showcased',
+        'highlighting', 'highlighted',
+        'crucial', 'align with',
+        'facilitate', 'facilitating',
+        'encompass', 'encompassing',
+        'elucidate', 'elucidating',
+        'amplify', 'amplifying',
+        'underpinnings', 'treasure trove',
+        'systemic',
+        'unleash', 'unleashing',
+        'empower', 'empowering',
+        'noteworthy', 'commendable', 'underscored'
+      ];
+
+      this._aiWordRegexes = aiWords.map(w => new RegExp(`\\b${w}\\b`, 'gi'));
+
+      const transitions = [
+        'moreover', 'furthermore', 'additionally', 'in addition',
+        'consequently', 'subsequently', 'nevertheless', 'nonetheless',
+        'hence', 'thus', 'therefore', 'accordingly',
+        'on the other hand', 'conversely', 'in contrast',
+        'similarly', 'likewise', 'as such',
+        'that said', 'that being said', 'with that in mind',
+        'in light of this', 'given this',
+        'firstly', 'secondly', 'thirdly', 'lastly', 'finally'
+      ];
+
+      this._transitionRegexes = transitions.map(t => new RegExp(`\\b${t}\\b`, 'gi'));
     }
 
     init() {
@@ -63,8 +148,41 @@
       // Listen for clicks on "see more" buttons
       document.addEventListener('click', (e) => this.handleClick(e), true);
 
+      // Single delegated observer for all comments
+      this._observeComments();
+
       // Save stats periodically
       setInterval(() => this.saveStats(), 5000);
+    }
+
+    _observeComments() {
+      if (this._commentObserver) return;
+
+      const commentSelectors = [
+        '.comments-comment-item',
+        '.comments-comment-entity',
+        '[data-test-id*="comment"]',
+        '[id*="comment-"]',
+        '.feed-shared-update-v2__comments-container .artdeco-card'
+      ];
+
+      this._commentObserver = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          for (const node of mutation.addedNodes) {
+            if (node.nodeType !== 1) continue;
+            // Check if the added node is a comment or contains comments
+            for (const selector of commentSelectors) {
+              if (node.matches?.(selector)) {
+                this.analyzeComment(node);
+              }
+              const nested = node.querySelectorAll?.(selector);
+              if (nested) nested.forEach(c => this.analyzeComment(c));
+            }
+          }
+        }
+      });
+
+      this._commentObserver.observe(document.body, { childList: true, subtree: true });
     }
 
     observeChanges() {
@@ -89,9 +207,12 @@
       // Check if clicked element is a "see more" type button
       const target = e.target;
       const text = (target.textContent || '').toLowerCase().trim();
+      const ariaLabel = (target.getAttribute('aria-label') || '').toLowerCase();
 
       // Very specific matching for LinkedIn's "...more" button
-      if (text === '…more' || text === '...more' || text === 'see more') {
+      const isMoreButton = text === '…more' || text === '...more' || text === 'see more' ||
+        ariaLabel.includes('see more');
+      if (isMoreButton) {
         log('See more clicked, will re-scan in 500ms');
         // Wait for content to expand, then re-scan
         setTimeout(() => {
@@ -188,6 +309,11 @@
       for (const btn of moreButtons) {
         const text = (btn.textContent || '').trim().toLowerCase();
         if (text === '…more' || text === '...more' || text === 'see more') {
+          return true;
+        }
+        // aria-label fallback
+        const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+        if (ariaLabel.includes('see more')) {
           return true;
         }
       }
@@ -334,6 +460,10 @@
       breakdown.promotional = this.checkPromotionalTone(text);
       score += breakdown.promotional;
 
+      // 17. Emoji Bullet Spam (3+ lines starting with same emoji)
+      breakdown.emojiPointers = this.checkEmojiPointers(text);
+      score += breakdown.emojiPointers;
+
       return { score, breakdown };
     }
 
@@ -341,86 +471,12 @@
     // From Wikipedia's "Signs of AI writing" + AI Phrase Finder's top 100
     // https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing
     checkAIVocabulary(text) {
-      const aiWords = [
-        // High-signal words from Wikipedia (2023–mid-2024 GPT-4 era)
-        'delve', 'delving', 'delved',
-        'tapestry', 'multifaceted', 'comprehensive',
-        'intricate', 'intricacies', 'nuanced', 'multitude',
-        'realm', 'paradigm', 'ethos',
-        'embark', 'beacon', 'testament',
-        'pivotal', 'paramount', 'profound',
-        'meticulous', 'meticulously',
-        'intrinsic', 'intrinsically',
-        'resonate', 'resonates', 'resonating',
-        'foster', 'fostering', 'fosters',
-        'leverage', 'leveraging', 'leveraged',
-        'navigate', 'navigating', 'navigates',
-        'elevate', 'elevating', 'elevates',
-        'underscore', 'underscores', 'underscoring',
-        'robust', 'robustly',
-        'seamless', 'seamlessly',
-        'vibrant', 'bustling',
-        'bespoke', 'tailor-made',
-        'nuance', 'nuances',
-        'landscape', // when used metaphorically
-        'journey', // when used metaphorically for career/life
-        'ecosystem',
-        'holistic', 'holistically',
-        'synergy', 'synergies',
-        'endeavor', 'endeavors',
-        'cornerstone',
-        'spearhead', 'spearheading',
-        'bolster', 'bolstering', 'bolstered',
-        'augment', 'augmenting',
-        'harness', 'harnessing',
-        'cultivate', 'cultivating',
-        'aligns', 'aligning',
-        'streamline', 'streamlining',
-        'optimize', 'optimizing',
-        'revolutionize', 'revolutionizing',
-        'transformative', 'transform',
-        'game-changer', 'game-changing',
-        'cutting-edge', 'cutting edge',
-        'groundbreaking',
-        'trailblazing',
-        'unparalleled',
-        'unrivaled',
-        'unprecedented',
-
-        // Wikipedia GPT-4 era additions
-        'garner', 'garnered', 'garnering',
-        'boasts', 'boasting',
-        'interplay',
-        'enduring',
-
-        // Wikipedia mid-2024–mid-2025 GPT-4o era
-        'enhance', 'enhancing', 'enhanced',
-        'showcasing', 'showcased',
-        'highlighting', 'highlighted',
-        'crucial',
-        'align with',
-
-        // Additional high-signal AI words
-        'facilitate', 'facilitating',
-        'encompass', 'encompassing',
-        'elucidate', 'elucidating',
-        'amplify', 'amplifying',
-        'underpinnings',
-        'treasure trove',
-        'systemic',
-        'unleash', 'unleashing',
-        'empower', 'empowering',
-        'noteworthy',
-        'commendable',
-        'underscored'
-      ];
-
+      this._compileRegexes();
       const lower = text.toLowerCase();
       let matches = 0;
 
-      for (const word of aiWords) {
-        // Use word boundary matching for accuracy
-        const regex = new RegExp(`\\b${word}\\b`, 'gi');
+      for (const regex of this._aiWordRegexes) {
+        regex.lastIndex = 0;
         if (regex.test(lower)) matches++;
       }
 
@@ -586,42 +642,12 @@
     // Heuristic 6: Excessive Transitions
     // Wikipedia: "moreover", "furthermore"
     checkTransitionSpam(text) {
-      const transitions = [
-        'moreover',
-        'furthermore',
-        'additionally',
-        'in addition',
-        'consequently',
-        'subsequently',
-        'nevertheless',
-        'nonetheless',
-        'hence',
-        'thus',
-        'therefore',
-        'accordingly',
-        'on the other hand',
-        'conversely',
-        'in contrast',
-        'similarly',
-        'likewise',
-        'as such',
-        'that said',
-        'that being said',
-        'with that in mind',
-        'in light of this',
-        'given this',
-        'firstly',
-        'secondly',
-        'thirdly',
-        'lastly',
-        'finally'
-      ];
-
+      this._compileRegexes();
       const lower = text.toLowerCase();
       let matches = 0;
 
-      for (const t of transitions) {
-        const regex = new RegExp(`\\b${t}\\b`, 'gi');
+      for (const regex of this._transitionRegexes) {
+        regex.lastIndex = 0;
         const found = lower.match(regex) || [];
         matches += found.length;
       }
@@ -730,13 +756,12 @@
     checkColonLists(text) {
       // Pattern: sentence ending in colon, followed by list items
       const colonPattern = /[^:\n]+:\s*\n/g;
-      const colonMatches = text.match(colonPattern) || [];
 
-      // Check if colon is followed by list structure
+      // Use matchAll to get correct positions for duplicate patterns
       let colonLists = 0;
-      for (const match of colonMatches) {
-        const index = text.indexOf(match);
-        const afterColon = text.substring(index + match.length, index + match.length + 200);
+      for (const match of text.matchAll(colonPattern)) {
+        const index = match.index;
+        const afterColon = text.substring(index + match[0].length, index + match[0].length + 200);
 
         // Check if next lines are list items
         const nextLines = afterColon.split('\n').slice(0, 4);
@@ -959,10 +984,30 @@
       return 0;
     }
 
+    // Heuristic 17: Emoji Bullet Spam
+    // AI posts often use the same emoji as bullet points for 3+ lines
+    checkEmojiPointers(text) {
+      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      // Match lines starting with an emoji (common pointer emojis)
+      const emojiLinePattern = /^([\u{1F300}-\u{1FAD6}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{2702}-\u{27B0}])/u;
+      const emojiCounts = {};
+      for (const line of lines) {
+        const match = line.match(emojiLinePattern);
+        if (match) {
+          const emoji = match[1];
+          emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
+        }
+      }
+      const maxCount = Math.max(0, ...Object.values(emojiCounts));
+      if (maxCount >= 4) return -5;
+      if (maxCount >= 3) return -3;
+      return 0;
+    }
+
     mapScoreToLevel(score) {
       // 2-level system: Human or Slop
       // Be decisive - no "maybe"
-      if (score >= -6) return 2;  // Human
+      if (score >= -4) return 2;  // Human
       return 1;                   // Slop
     }
 
@@ -1027,7 +1072,8 @@
         metaphors: ['tired business clichés', 'overused metaphors', 'corporate speak'],
         engagementBait: ['engagement bait', '"what do you think?"', 'comment-fishing'],
         curlyQuotes: ['curly smart quotes', 'ChatGPT-style quotes', 'fancy quotation marks'],
-        promotional: ['marketing speak', 'press-release tone', 'promotional language']
+        promotional: ['marketing speak', 'press-release tone', 'promotional language'],
+        emojiPointers: ['emoji bullet spam', 'emoji list padding', 'repeated emoji bullets']
       };
 
       // Pick a random variant for variety
@@ -1159,37 +1205,31 @@
     }
 
     blockPost(post) {
-      if (post.classList.contains('slop-post-blocked')) return;
-
-      post.classList.add('slop-post-blocked');
-
-      const overlay = document.createElement('div');
-      overlay.className = 'slop-block-overlay';
-      overlay.innerHTML = '<span class="slop-block-icon">🚫</span><span class="slop-block-text">Slop blocked</span>';
-      post.appendChild(overlay);
+      if (post.dataset.slopBlocked) return;
+      post.dataset.slopBlocked = 'true';
+      post.style.display = 'none';
     }
 
     unblockPost(post) {
-      post.classList.remove('slop-post-blocked');
-      const overlay = post.querySelector('.slop-block-overlay');
-      if (overlay) overlay.remove();
+      if (!post.dataset.slopBlocked) return;
+      delete post.dataset.slopBlocked;
+      post.style.display = '';
     }
 
     // Apply block setting to all already-analyzed posts
     applyBlockSetting() {
-      const allBadges = document.querySelectorAll('.slop-detector-badge[data-level="1"]');
-      allBadges.forEach(badge => {
-        // Walk up to the post element
-        const stickyContainer = badge.parentElement;
-        const post = stickyContainer?.parentElement;
-        if (!post) return;
-
-        if (this.blockSlop) {
-          this.blockPost(post);
-        } else {
-          this.unblockPost(post);
-        }
-      });
+      if (this.blockSlop) {
+        // Find all level-1 (slop) posts by badge
+        const slopPosts = document.querySelectorAll('[data-urn*="urn:li:activity"]');
+        slopPosts.forEach(post => {
+          const badge = post.querySelector('.slop-detector-badge[data-level="1"]');
+          if (badge) this.blockPost(post);
+        });
+      } else {
+        // Unblock all blocked posts
+        const blockedPosts = document.querySelectorAll('[data-slop-blocked]');
+        blockedPosts.forEach(post => this.unblockPost(post));
+      }
     }
 
     // ========================================
@@ -1202,6 +1242,7 @@
         '.comments-comment-item',
         '.comments-comment-entity',
         '[data-test-id*="comment"]',
+        '[id*="comment-"]',
         '.feed-shared-update-v2__comments-container .artdeco-card'
       ];
 
@@ -1210,20 +1251,7 @@
         comments.forEach(comment => this.analyzeComment(comment));
       }
 
-      // Also observe for newly loaded comments
-      const commentsContainer = post.querySelector(
-        '.comments-comments-list, [class*="comments-container"], [class*="comment-list"]'
-      );
-      if (commentsContainer && !commentsContainer.dataset.slopObserved) {
-        commentsContainer.dataset.slopObserved = 'true';
-        const observer = new MutationObserver(() => {
-          for (const selector of commentSelectors) {
-            const comments = post.querySelectorAll(selector);
-            comments.forEach(comment => this.analyzeComment(comment));
-          }
-        });
-        observer.observe(commentsContainer, { childList: true, subtree: true });
-      }
+      // Comment observation is handled by the single delegated observer in _observeComments()
     }
 
     analyzeComment(comment) {
@@ -1235,6 +1263,7 @@
         '.comments-comment-item__main-content, ' +
         '.update-components-text, ' +
         '[class*="comment-item__inline-show-more-text"], ' +
+        '[class*="comment__content"], ' +
         'span[dir="ltr"]'
       );
       if (!textEl) return;
@@ -1260,7 +1289,8 @@
           '.comments-post-meta__name-text, ' +
           '[class*="comment-actor"], ' +
           '.comment-entity__actor, ' +
-          'a[class*="actor"]'
+          'a[class*="actor"], ' +
+          'a[href*="/in/"]'
         );
         if (nameEl && !nameEl.parentElement.querySelector('.slop-reply-guy-tag')) {
           nameEl.parentElement.insertBefore(tag, nameEl.nextSibling);
@@ -1299,6 +1329,9 @@
       breakdown.engagementBait = this.checkEngagementBait(text);
       score += breakdown.engagementBait;
 
+      breakdown.emojiPointers = this.checkEmojiPointers(text);
+      score += breakdown.emojiPointers;
+
       return { score, breakdown };
     }
 
@@ -1311,7 +1344,8 @@
         emDash: 'em dash abuse',
         curlyQuotes: 'smart quotes',
         promotional: 'promotional tone',
-        engagementBait: 'engagement bait'
+        engagementBait: 'engagement bait',
+        emojiPointers: 'emoji bullet spam'
       };
 
       const signals = Object.entries(breakdown)
